@@ -18,7 +18,8 @@ const server = http.createServer(async (req, res) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + OPENCLAW_TOKEN
+          'Authorization': 'Bearer ' + OPENCLAW_TOKEN,
+          'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
           model: 'openclaw/main',
