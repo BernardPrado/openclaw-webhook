@@ -171,32 +171,58 @@ async function generateBriefing(mode) {
 AGENDA: ${calendar}
 EMAILS NAO LIDOS: ${gmail}
 
-REGRAS: texto plano, SEM emojis, SEM asteriscos, SEM markdown, maximo 700 caracteres, secoes separadas por "SECAO: texto".
+RETORNE APENAS UM JSON VALIDO com exatamente 3 campos, sem texto fora do JSON:
+{
+  "agenda": "[eventos de hoje com horario, ou 'Sem eventos hoje']",
+  "emails": "[resumo dos emails nao lidos, ou 'Sem pendencias']",
+  "prioridade": "[1 insight pratico + 1 acao concreta para hoje como SE Botmaker, maximo 200 chars]"
+}
 
-Estrutura: BOM DIA: [dia e data]. AGENDA: [eventos reais ou "sem eventos hoje"]. EMAILS: [resumo real ou "sem pendencias"]. FOCO: [1 insight pratico para SE Botmaker]. DICA: [1 acao concreta para hoje].`,
+Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`,
 
     
-    weekly: `Hoje e ${now}. Gere o planejamento semanal do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
+    weekly: `Hoje e ${now}. Gere planejamento semanal do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
 
 EVENTOS DA SEMANA: ${calendar}
 EMAILS PENDENTES: ${gmail}
 
-REGRAS: texto plano, SEM emojis, SEM asteriscos, SEM markdown, maximo 700 caracteres, secoes separadas por 'SECAO: texto'.
+RETORNE APENAS UM JSON VALIDO com exatamente 3 campos, sem texto fora do JSON:
+{
+  "agenda": "[eventos agrupados por dia seg-sex com horarios, maximo 250 chars]",
+  "emails": "[emails pendentes relevantes, ou 'Sem pendencias']",
+  "prioridade": "[top 3 acoes da semana numeradas, maximo 250 chars]"
+}
 
-Estrutura: BOA SEMANA: [data de hoje e periodo da semana]. AGENDA: [eventos reais dos proximos 5 dias ou 'sem eventos agendados']. EMAILS: [pendencias se houver]. PRIORIDADE: [top 3 acoes para a semana com base no contexto]. FOCO: [1 insight estrategico para SE Botmaker esta semana].`,
+Regras: texto plano, SEM emojis, SEM asteriscos, maximo 250 chars por campo.`,
     night: `Hoje e ${now}. Gere check-in noturno do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
 
 AGENDA DO DIA: ${calendar}
 EMAILS PENDENTES: ${gmail}
 
-REGRAS: texto plano, SEM emojis, SEM asteriscos, SEM markdown, maximo 600 caracteres, secoes separadas por "SECAO: texto".
+RETORNE APENAS UM JSON VALIDO com exatamente 3 campos, sem texto fora do JSON:
+{
+  "agenda": "[resumo do que aconteceu hoje, ou 'Dia sem eventos']",
+  "emails": "[emails pendentes se houver, ou 'Sem pendencias']",
+  "prioridade": "[1 acao concreta para comecar amanha + 1 lembrete, maximo 200 chars]"
+}
 
-Estrutura: CHECK-IN: [dia e data]. DIA: [1 frase direta sobre o dia]. EMAILS: [pendencias se houver]. AMANHA: [2 lembretes uteis]. PRIORIDADE: [1 acao para comecar amanha].`
+Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`
   };
 
   if (!prompts[mode]) throw new Error('Modo invalido: ' + mode);
-  const text = await callAnthropic(prompts[mode]);
-  return sanitize(text);
+  const raw = await callAnthropic(prompts[mode]);
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    return {
+      agenda: sanitize(parsed.agenda || 'a confirmar'),
+      emails: sanitize(parsed.emails || 'a confirmar'),
+      prioridade: sanitize(parsed.prioridade || 'a confirmar')
+    };
+  } catch(e) {
+    console.error('JSON parse falhou:', raw);
+    return { agenda: sanitize(raw).slice(0, 200), emails: 'a confirmar', prioridade: 'a confirmar' };
+  }
 }
 
 // ─── SERVER ──────────────────────────────────────────────────────────────────
