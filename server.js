@@ -52,7 +52,7 @@ async function getAccessToken() {
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
 async function getCalendarEvents(token) {
   const now = new Date();
-  const end = new Date(); end.setHours(23, 59, 59, 999);
+  const end = new Date(); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
   const params = new URLSearchParams({
     timeMin: now.toISOString(),
     timeMax: end.toISOString(),
@@ -164,6 +164,15 @@ REGRAS: texto plano, SEM emojis, SEM asteriscos, SEM markdown, maximo 700 caract
 
 Estrutura: BOM DIA: [dia e data]. AGENDA: [eventos reais ou "sem eventos hoje"]. EMAILS: [resumo real ou "sem pendencias"]. FOCO: [1 insight pratico para SE Botmaker]. DICA: [1 acao concreta para hoje].`,
 
+    
+    weekly: `Hoje e ${now}. Gere o planejamento semanal do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
+
+EVENTOS DA SEMANA: ${calendar}
+EMAILS PENDENTES: ${gmail}
+
+REGRAS: texto plano, SEM emojis, SEM asteriscos, SEM markdown, maximo 700 caracteres, secoes separadas por 'SECAO: texto'.
+
+Estrutura: BOA SEMANA: [data de hoje e periodo da semana]. AGENDA: [eventos reais dos proximos 5 dias ou 'sem eventos agendados']. EMAILS: [pendencias se houver]. PRIORIDADE: [top 3 acoes para a semana com base no contexto]. FOCO: [1 insight estrategico para SE Botmaker esta semana].`,
     night: `Hoje e ${now}. Gere check-in noturno do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
 
 AGENDA DO DIA: ${calendar}
