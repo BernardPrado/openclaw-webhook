@@ -51,8 +51,14 @@ async function getAccessToken() {
 
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
 async function getCalendarEvents(token) {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  const end = new Date(now); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
+  const nowSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  // Calcula proxima segunda-feira
+  const dayOfWeek = nowSP.getDay(); // 0=dom, 1=seg...
+  const daysUntilMonday = dayOfWeek === 1 ? 0 : (8 - dayOfWeek) % 7 || 7;
+  const now = new Date(nowSP);
+  now.setDate(nowSP.getDate() + daysUntilMonday);
+  now.setHours(0, 0, 0, 0);
+  const end = new Date(now); end.setDate(now.getDate() + 4); end.setHours(23, 59, 59, 999);
   const params = new URLSearchParams({
     timeMin: now.toISOString(),
     timeMax: end.toISOString(),
