@@ -135,7 +135,7 @@ function sanitize(text) {
     .replace(/\n+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
-    .slice(0, 700);
+    .slice(0, 900);
 }
 
 // ─── BRIEFING ────────────────────────────────────────────────────────────────
