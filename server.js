@@ -58,7 +58,7 @@ async function getCalendarEvents(token) {
     timeMax: end.toISOString(),
     singleEvents: 'true',
     orderBy: 'startTime',
-    maxResults: '8'
+    maxResults: '20'
   });
 
   const res = await httpsRequest({
@@ -69,14 +69,19 @@ async function getCalendarEvents(token) {
   });
 
   const data = JSON.parse(res.body);
-  if (!data.items || data.items.length === 0) return 'nenhum evento hoje';
+  if (!data.items || data.items.length === 0) return 'nenhum evento esta semana';
 
-  return data.items.map(e => {
+  const byDay = {};
+  data.items.forEach(e => {
+    const d = e.start.dateTime || e.start.date;
+    const day = new Date(d).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', timeZone: 'America/Sao_Paulo' });
+    if (!byDay[day]) byDay[day] = [];
     const t = e.start.dateTime
       ? new Date(e.start.dateTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
       : 'dia todo';
-    return t + ' ' + e.summary;
-  }).join(', ');
+    byDay[day].push(t + ' ' + e.summary);
+  });
+  return Object.entries(byDay).map(([day, evs]) => day + ': ' + evs.join(', ')).join(' | ');
 }
 
 // ─── GMAIL ───────────────────────────────────────────────────────────────────
