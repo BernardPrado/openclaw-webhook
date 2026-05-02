@@ -140,7 +140,7 @@ function sanitize(text) {
 
 // ─── BRIEFING ────────────────────────────────────────────────────────────────
 async function generateBriefing(mode) {
-  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   let calendar = 'sem acesso';
   let gmail = 'sem acesso';
 
