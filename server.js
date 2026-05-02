@@ -51,8 +51,8 @@ async function getAccessToken() {
 
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
 async function getCalendarEvents(token) {
-  const now = new Date();
-  const end = new Date(); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const end = new Date(now); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
   const params = new URLSearchParams({
     timeMin: now.toISOString(),
     timeMax: end.toISOString(),
