@@ -225,6 +225,18 @@ Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`
   }
 }
 
+// ─── TELEGRAM ────────────────────────────────────────────────────────────────
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+
+async function sendTelegram(chatId, text) {
+  await httpsRequest({
+    hostname: 'api.telegram.org',
+    path: `/bot${TELEGRAM_TOKEN}/sendMessage`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  }, { chat_id: chatId, text: text });
+}
+
 // ─── SERVER ──────────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   if (req.method === 'GET') { res.writeHead(200); res.end('OK'); return; }
@@ -248,6 +260,43 @@ const server = http.createServer(async (req, res) => {
         console.error('[briefing] erro:', err.message);
         res.writeHead(500);
         res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // Endpoint /telegram
+    if (url.pathname === '/telegram') {
+      res.writeHead(200);
+      res.end('OK');
+      try {
+        const payload = JSON.parse(body || '{}');
+        const message = payload.message;
+        if (!message || !message.text) return;
+        const chatId = message.chat.id;
+        const text = message.text;
+        const sender = message.from?.first_name || 'unknown';
+        console.log('[telegram] de ' + sender + ': ' + text);
+
+        const response = await fetch(OPENCLAW_URL + '/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + OPENCLAW_TOKEN,
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({
+            model: 'openclaw/main',
+            stream: false,
+            messages: [{ role: 'user', content: text }],
+            user: String(chatId)
+          })
+        });
+
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || 'Processado.';
+        await sendTelegram(chatId, reply);
+      } catch (err) {
+        console.error('[telegram] erro:', err.message);
       }
       return;
     }
