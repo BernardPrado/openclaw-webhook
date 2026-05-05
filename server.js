@@ -1,13 +1,12 @@
 const http = require('http');
 const https = require('https');
 const PORT = process.env.PORT || 3000;
-const OPENCLAW_URL = process.env.OPENCLAW_URL || 'https://smokiness-dense-stooge.ngrok-free.dev';
-const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '167c88d60fc75a0f9acc9569477edb5fbb881e5345531356';
 
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 const ANTHROPIC_API_KEY    = process.env.ANTHROPIC_API_KEY;
+const TELEGRAM_TOKEN       = process.env.TELEGRAM_TOKEN;
 
 // ─── HTTP helper ─────────────────────────────────────────────────────────────
 function httpsRequest(options, body) {
@@ -28,7 +27,7 @@ function httpsRequest(options, body) {
   });
 }
 
-// ─── GOOGLE: access token ─────────────────────────────────────────────────────
+// ─── GOOGLE: access token ────────────────────────────────────────────────────
 async function getAccessToken() {
   const body = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -92,7 +91,6 @@ async function getCalendarEvents(token) {
 
 // ─── GMAIL ───────────────────────────────────────────────────────────────────
 async function getUnreadEmails(token) {
-  // Busca não lidos
   const resUnread = await httpsRequest({
     hostname: 'gmail.googleapis.com',
     path: '/gmail/v1/users/me/messages?q=is:unread+is:inbox&maxResults=5',
@@ -100,7 +98,6 @@ async function getUnreadEmails(token) {
     headers: { 'Authorization': 'Bearer ' + token }
   });
 
-  // Busca lidos mas sem resposta nos últimos 7 dias
   const resPending = await httpsRequest({
     hostname: 'gmail.googleapis.com',
     path: '/gmail/v1/users/me/messages?q=is:read+is:inbox+-in:sent+newer_than:7d&maxResults=5',
@@ -124,12 +121,10 @@ async function getUnreadEmails(token) {
 
   const unreadData = JSON.parse(resUnread.body);
   const pendingData = JSON.parse(resPending.body);
-
   const unreadMsgs = unreadData.messages || [];
   const pendingMsgs = pendingData.messages || [];
 
   let result = '';
-
   if (unreadMsgs.length > 0) {
     const emails = await Promise.all(unreadMsgs.slice(0, 3).map(m => fetchHeaders(m.id)));
     result += `${unreadData.resultSizeEstimate || unreadMsgs.length} nao lidos: ${emails.join('; ')}`;
@@ -206,7 +201,6 @@ RETORNE APENAS UM JSON VALIDO com exatamente 3 campos, sem texto fora do JSON:
 
 Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`,
 
-    
     weekly: `Hoje e ${now}. Gere planejamento semanal do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
 
 EVENTOS DA SEMANA: ${calendar}
@@ -220,6 +214,7 @@ RETORNE APENAS UM JSON VALIDO com exatamente 3 campos, sem texto fora do JSON:
 }
 
 Regras: texto plano, SEM emojis, SEM asteriscos, maximo 250 chars por campo.`,
+
     night: `Hoje e ${now}. Gere check-in noturno do Bernard Prado, Sales Engineer Senior Botmaker Brasil.
 
 AGENDA DO DIA: ${calendar}
@@ -252,20 +247,17 @@ Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`
 }
 
 // ─── TELEGRAM ────────────────────────────────────────────────────────────────
-// Endpoint /telegram
-if (url.pathname === '/telegram') {
-  res.writeHead(200);
-  res.end('OK');
-  try {
-    const payload = JSON.parse(body || '{}');
-    const message = payload.message;
-    if (!message || !message.text) return;
-    const chatId = message.chat.id;
-    const text = message.text;
-    const sender = message.from?.first_name || 'unknown';
-    console.log('[telegram] de ' + sender + ': ' + text);
+async function sendTelegram(chatId, text) {
+  await httpsRequest({
+    hostname: 'api.telegram.org',
+    path: `/bot${TELEGRAM_TOKEN}/sendMessage`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  }, { chat_id: chatId, text: text });
+}
 
-    const soul = `Você é o assistente pessoal e profissional do Bernard Prado, Sales Engineer / Pré-vendas sênior da Botmaker. Hub de tudo: rotina, tarefas, agenda, documentos, ideias e automações.
+// ─── SOUL ────────────────────────────────────────────────────────────────────
+const SOUL = `Você é o assistente pessoal e profissional do Bernard Prado, Sales Engineer / Pré-vendas sênior da Botmaker. Hub de tudo: rotina, tarefas, agenda, documentos, ideias e automações.
 
 Empresa: Botmaker — plataforma conversacional com IA própria, certificada ISO 27001, mais de 40 países, parceira oficial WhatsApp (BSP), Meta, Apple e Google.
 
@@ -282,30 +274,6 @@ ideia: [descrição] → Registrar ideia
 pesquisa: [tema] → Pesquisar e entregar síntese
 
 Regras: sempre execute, nunca descreva planos. Nunca invente dados — use "a confirmar". Uma pergunta por vez.`;
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system: soul,
-        messages: [{ role: 'user', content: text }]
-      })
-    });
-
-    const claudeData = await claudeRes.json();
-    const reply = claudeData.content?.[0]?.text || 'Erro ao processar.';
-    await sendTelegram(chatId, reply);
-  } catch (err) {
-    console.error('[telegram] erro:', err.message);
-  }
-  return;
-}
 
 // ─── SERVER ──────────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
@@ -347,23 +315,23 @@ const server = http.createServer(async (req, res) => {
         const sender = message.from?.first_name || 'unknown';
         console.log('[telegram] de ' + sender + ': ' + text);
 
-        const response = await fetch(OPENCLAW_URL + '/v1/chat/completions', {
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + OPENCLAW_TOKEN,
-            'ngrok-skip-browser-warning': 'true'
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
           },
           body: JSON.stringify({
-            model: 'openclaw/main',
-            stream: false,
-            messages: [{ role: 'user', content: text }],
-            user: String(chatId)
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            system: SOUL,
+            messages: [{ role: 'user', content: text }]
           })
         });
 
-        const data = await response.json();
-        const reply = data.choices?.[0]?.message?.content || 'Processado.';
+        const claudeData = await claudeRes.json();
+        const reply = claudeData.content?.[0]?.text || 'Erro ao processar.';
         await sendTelegram(chatId, reply);
       } catch (err) {
         console.error('[telegram] erro:', err.message);
@@ -371,32 +339,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Proxy OpenClaw (comportamento original)
-    try {
-      const payload = JSON.parse(body);
-      const message = payload.messages?.[0]?.text || payload.text || body;
-      const sender = payload.messages?.[0]?.from || payload.from || 'unknown';
-      console.log('Msg de ' + sender + ': ' + message);
-
-      const response = await fetch(OPENCLAW_URL + '/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + OPENCLAW_TOKEN,
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ model: 'openclaw/main', stream: false, messages: [{ role: 'user', content: message }], user: sender })
-      });
-
-      const data = await response.json();
-      const reply = data.choices?.[0]?.message?.content || 'Processado.';
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text: reply }));
-    } catch (err) {
-      console.error('Erro:', err.message);
-      res.writeHead(500);
-      res.end('Erro: ' + err.message);
-    }
   });
 });
 
