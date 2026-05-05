@@ -52,15 +52,15 @@ async function getAccessToken() {
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
 async function getCalendarEvents(token) {
   const nowSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  // Calcula proxima segunda-feira
-  const dayOfWeek = nowSP.getDay(); // 0=dom, 1=seg...
-  const daysUntilMonday = dayOfWeek === 1 ? 0 : (8 - dayOfWeek) % 7 || 7;
-  const now = new Date(nowSP);
-  now.setDate(nowSP.getDate() + daysUntilMonday);
-  now.setHours(0, 0, 0, 0);
-  const end = new Date(now); end.setDate(now.getDate() + 4); end.setHours(23, 59, 59, 999);
+  const start = new Date(nowSP);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(nowSP);
+  const daysUntilSunday = 7 - nowSP.getDay();
+  end.setDate(nowSP.getDate() + daysUntilSunday);
+  end.setHours(23, 59, 59, 999);
+
   const params = new URLSearchParams({
-    timeMin: now.toISOString(),
+    timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     singleEvents: 'true',
     orderBy: 'startTime',
@@ -80,7 +80,7 @@ async function getCalendarEvents(token) {
   const byDay = {};
   data.items.forEach(e => {
     const d = e.start.dateTime || e.start.date;
-    const day = new Date(d).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', timeZone: 'America/Sao_Paulo' });
+    const day = new Date(d).toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', timeZone: 'America/Sao_Paulo' });
     if (!byDay[day]) byDay[day] = [];
     const t = e.start.dateTime
       ? new Date(e.start.dateTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
@@ -92,20 +92,26 @@ async function getCalendarEvents(token) {
 
 // ─── GMAIL ───────────────────────────────────────────────────────────────────
 async function getUnreadEmails(token) {
-  const res = await httpsRequest({
+  // Busca não lidos
+  const resUnread = await httpsRequest({
     hostname: 'gmail.googleapis.com',
     path: '/gmail/v1/users/me/messages?q=is:unread+is:inbox&maxResults=5',
     method: 'GET',
     headers: { 'Authorization': 'Bearer ' + token }
   });
 
-  const data = JSON.parse(res.body);
-  if (!data.messages || data.messages.length === 0) return 'nenhum email nao lido';
+  // Busca lidos mas sem resposta nos últimos 7 dias
+  const resPending = await httpsRequest({
+    hostname: 'gmail.googleapis.com',
+    path: '/gmail/v1/users/me/messages?q=is:read+is:inbox+-in:sent+newer_than:7d&maxResults=5',
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
 
-  const emails = await Promise.all(data.messages.slice(0, 5).map(async msg => {
+  async function fetchHeaders(msgId) {
     const d = await httpsRequest({
       hostname: 'gmail.googleapis.com',
-      path: '/gmail/v1/users/me/messages/' + msg.id + '?format=metadata&metadataHeaders=Subject&metadataHeaders=From',
+      path: '/gmail/v1/users/me/messages/' + msgId + '?format=metadata&metadataHeaders=Subject&metadataHeaders=From',
       method: 'GET',
       headers: { 'Authorization': 'Bearer ' + token }
     });
@@ -114,9 +120,29 @@ async function getUnreadEmails(token) {
     const subject = (h.find(x => x.name === 'Subject') || {}).value || '(sem assunto)';
     const from = ((h.find(x => x.name === 'From') || {}).value || '').replace(/<.*>/, '').trim();
     return (from || 'desconhecido') + ': ' + subject;
-  }));
+  }
 
-  return (data.resultSizeEstimate || emails.length) + ' nao lidos. ' + emails.join('; ');
+  const unreadData = JSON.parse(resUnread.body);
+  const pendingData = JSON.parse(resPending.body);
+
+  const unreadMsgs = unreadData.messages || [];
+  const pendingMsgs = pendingData.messages || [];
+
+  let result = '';
+
+  if (unreadMsgs.length > 0) {
+    const emails = await Promise.all(unreadMsgs.slice(0, 3).map(m => fetchHeaders(m.id)));
+    result += `${unreadData.resultSizeEstimate || unreadMsgs.length} nao lidos: ${emails.join('; ')}`;
+  } else {
+    result += 'nenhum nao lido';
+  }
+
+  if (pendingMsgs.length > 0) {
+    const emails = await Promise.all(pendingMsgs.slice(0, 3).map(m => fetchHeaders(m.id)));
+    result += ` | pendentes sem resposta: ${emails.join('; ')}`;
+  }
+
+  return result || 'sem pendencias';
 }
 
 // ─── ANTHROPIC ───────────────────────────────────────────────────────────────
