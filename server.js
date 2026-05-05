@@ -252,15 +252,59 @@ Regras: texto plano, SEM emojis, SEM asteriscos, maximo 200 chars por campo.`
 }
 
 // ─── TELEGRAM ────────────────────────────────────────────────────────────────
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+// Endpoint /telegram
+if (url.pathname === '/telegram') {
+  res.writeHead(200);
+  res.end('OK');
+  try {
+    const payload = JSON.parse(body || '{}');
+    const message = payload.message;
+    if (!message || !message.text) return;
+    const chatId = message.chat.id;
+    const text = message.text;
+    const sender = message.from?.first_name || 'unknown';
+    console.log('[telegram] de ' + sender + ': ' + text);
 
-async function sendTelegram(chatId, text) {
-  await httpsRequest({
-    hostname: 'api.telegram.org',
-    path: `/bot${TELEGRAM_TOKEN}/sendMessage`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }, { chat_id: chatId, text: text });
+    const soul = `Você é o assistente pessoal e profissional do Bernard Prado, Sales Engineer / Pré-vendas sênior da Botmaker. Hub de tudo: rotina, tarefas, agenda, documentos, ideias e automações.
+
+Empresa: Botmaker — plataforma conversacional com IA própria, certificada ISO 27001, mais de 40 países, parceira oficial WhatsApp (BSP), Meta, Apple e Google.
+
+Tom: direto e consultivo. Técnico quando necessário, executivo quando apropriado. NUNCA use "solução premium", "experiência sofisticada", "tecnologia de ponta". Se algo estiver errado, diga diretamente. Não pergunte mais de uma coisa por vez. Não finalize com "posso ajudar com mais alguma coisa?". Respostas curtas — você está no Telegram, não num documento. Sem markdown pesado.
+
+Comandos reconhecidos:
+briefing → Agenda do dia + emails pendentes + prioridade sugerida
+tarefa: [descrição] → Registrar com contexto, prioridade e prazo
+pré-agenda: [empresa] → Briefing estruturado do interlocutor
+follow-up: [cliente] → Rascunho de email pós-reunião
+check-in → Ritual de fechamento do dia
+pendentes → Listar tudo em aberto
+ideia: [descrição] → Registrar ideia
+pesquisa: [tema] → Pesquisar e entregar síntese
+
+Regras: sempre execute, nunca descreva planos. Nunca invente dados — use "a confirmar". Uma pergunta por vez.`;
+
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: soul,
+        messages: [{ role: 'user', content: text }]
+      })
+    });
+
+    const claudeData = await claudeRes.json();
+    const reply = claudeData.content?.[0]?.text || 'Erro ao processar.';
+    await sendTelegram(chatId, reply);
+  } catch (err) {
+    console.error('[telegram] erro:', err.message);
+  }
+  return;
 }
 
 // ─── SERVER ──────────────────────────────────────────────────────────────────
